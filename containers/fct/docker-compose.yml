@@ -1,0 +1,108 @@
+version: '4'
+
+services:
+
+  fhir:
+    image: hapiproject/hapi:v6.8.0
+    ports:
+      - "8083:8080"
+    environment:
+      profiles.active: r4
+      spring.datasource.url: 'jdbc:postgresql://db:5432/hapi'
+      spring.datasource.username: admin
+      spring.datasource.password: admin
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.search.enabled: 'true'
+      spring.jpa.properties.hibernate.search.backend.type: lucene
+      spring.jpa.properties.hibernate.search.backend.directory.type: local-filesystem
+      spring.jpa.properties.hibernate.search.backend.directory.root: target/lucenefiles
+      spring.jpa.properties.hibernate.search.backend.lucene_version: lucene_current
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect
+      hapi.fhir.tester.home.server_address: "http://localhost:8083/fhir"
+      hapi.fhir.enable_index_missing_fields: 'true'
+
+    volumes:
+      - hapi-data-fct:/data/hapi
+    depends_on:
+      - db
+
+  db:
+    image: postgres:bullseye
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: admin
+      POSTGRES_USER: admin
+      POSTGRES_DB: hapi
+    # not needed for networking between containers but here for troubleshooting
+    ports:
+      - "5434:5432"
+
+  es:
+    image: elasticsearch:7.17.6
+    environment:
+      node.name: es01
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data01-fct:/usr/share/elasticsearch/data
+    ports:
+      - 9202:9200
+
+
+  kibana:
+    image: kibana:7.17.6
+    ports:
+      - 5603:5601
+    environment:
+      ELASTICSEARCH_URL: http://es:9200
+      ELASTICSEARCH_HOSTS: http://es:9200
+
+
+  redis:
+    image: redis:alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    hostname: redis
+    ports:
+      - 6382:6379
+    volumes:
+      - redis-data-fct:/data
+
+  # ihris:
+  #   platform: linux/amd64
+  #   # image: ihris/ihris
+  #   build:
+  #     context: .  # Specify the relative path to the subfolder
+  #     dockerfile: ihris.Dockerfile 
+  #     args:
+  #       LOCALES: locales/
+  #       LOGO_PATH: logo/iHRIS5Logo.png
+  #       CONFIG: config/
+  #   ports:
+  #     - "3002:3002"
+  #   depends_on:
+  #     - redis
+  #     - fhir
+  #     - es
+  #   restart: on-failure
+  #   environment:
+  #     IHRIS_FHIR__BASE: http://fhir:8080/fhir
+  #     IHRIS_REDIS__URL: redis://redis:6379
+  #     IHRIS_ELASTICSEARCH__BASE: http://es:9200
+  #     IHRIS_KIBANA__BASE: http://kibana:5601
+  #     PORT: 3002
+
+volumes:
+  redis-data-fct:
+  data01-fct:
+    # driver: local
+  hapi-data-fct:
+    # external: true
+
+
+
+
